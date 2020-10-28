@@ -166,3 +166,4 @@ tags
 *.tgz
 cnn_dm/
 xsum_results/
+*.ckpt*
