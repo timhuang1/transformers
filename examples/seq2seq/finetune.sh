@@ -2,7 +2,6 @@
 # run ./finetune.sh --help to see all the possible options
 python finetune.py \
     --learning_rate=3e-5 \
-    --fp16 \
     --gpus 1 \
     --do_train \
     --do_predict \
