@@ -1,3 +1,18 @@
+# Copyright 2020 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import warnings
 from argparse import ArgumentParser
 from os import listdir, makedirs
 from pathlib import Path
@@ -5,8 +20,7 @@ from typing import Dict, List, Optional, Tuple
 
 from packaging.version import Version, parse
 
-from transformers import is_tf_available, is_torch_available
-from transformers.file_utils import ModelOutput
+from transformers.file_utils import ModelOutput, is_tf_available, is_torch_available
 from transformers.pipelines import Pipeline, pipeline
 from transformers.tokenization_utils import BatchEncoding
 
@@ -77,19 +91,21 @@ class OnnxConverterArgumentParser(ArgumentParser):
 
 def generate_identified_filename(filename: Path, identifier: str) -> Path:
     """
-    Append a string-identifier at the end (before the extension,  if any) to the provided filepath.
+    Append a string-identifier at the end (before the extension, if any) to the provided filepath
+
     Args:
         filename: pathlib.Path The actual path object we would like to add an identifier suffix
         identifier: The suffix to add
 
-    Returns: String with concatenated indentifier at the end of the filename
+    Returns: String with concatenated identifier at the end of the filename
     """
     return filename.parent.joinpath(filename.stem + identifier).with_suffix(filename.suffix)
 
 
 def check_onnxruntime_requirements(minimum_version: Version):
     """
-    Check onnxruntime is installed and if the installed version match is recent enough.
+    Check onnxruntime is installed and if the installed version match is recent enough
+
     Raises:
         ImportError: If onnxruntime is not installed or too old version is found
     """
@@ -117,7 +133,8 @@ def check_onnxruntime_requirements(minimum_version: Version):
 
 def ensure_valid_input(model, tokens, input_names):
     """
-    Ensure input are presented in the correct order, without any None
+    Ensure input are presented in the correct order, without any Non
+
     Args:
         model: The model used to forward the input data
         tokens: BatchEncoding holding the input data
@@ -138,18 +155,20 @@ def ensure_valid_input(model, tokens, input_names):
             print(f"{arg_name} is not present in the generated input list.")
             break
 
-    print("Generated inputs order: {}".format(ordered_input_names))
+    print(f"Generated inputs order: {ordered_input_names}")
     return ordered_input_names, tuple(model_args)
 
 
 def infer_shapes(nlp: Pipeline, framework: str) -> Tuple[List[str], List[str], Dict, BatchEncoding]:
     """
-    Attempt to infer the static vs dynamic axes for each input and output tensors for a specific model.
+    Attempt to infer the static vs dynamic axes for each input and output tensors for a specific model
+
     Args:
         nlp: The pipeline object holding the model to be exported
         framework: The framework identifier to dispatch to the correct inference scheme (pt/tf)
 
     Returns:
+
         - List of the inferred input variable names
         - List of the inferred output variable names
         - Dictionary with input/output variables names as key and shape tensor as value
@@ -204,9 +223,12 @@ def infer_shapes(nlp: Pipeline, framework: str) -> Tuple[List[str], List[str], D
     return input_vars, output_names, dynamic_axes, tokens
 
 
-def load_graph_from_args(pipeline_name: str, framework: str, model: str, tokenizer: Optional[str] = None) -> Pipeline:
+def load_graph_from_args(
+    pipeline_name: str, framework: str, model: str, tokenizer: Optional[str] = None, **models_kwargs
+) -> Pipeline:
     """
-    Convert the set of arguments provided through the CLI to an actual pipeline reference (tokenizer + model)
+    Convert the set of arguments provided through the CLI to an actual pipeline reference (tokenizer + model
+
     Args:
         pipeline_name: The kind of pipeline to use (ner, question-answering, etc.)
         framework: The actual model to convert the pipeline from ("pt" or "tf")
@@ -229,12 +251,13 @@ def load_graph_from_args(pipeline_name: str, framework: str, model: str, tokeniz
     print(f"Loading pipeline (model: {model}, tokenizer: {tokenizer})")
 
     # Allocate tokenizer and model
-    return pipeline(pipeline_name, model=model, tokenizer=tokenizer, framework=framework)
+    return pipeline(pipeline_name, model=model, tokenizer=tokenizer, framework=framework, model_kwargs=models_kwargs)
 
 
 def convert_pytorch(nlp: Pipeline, opset: int, output: Path, use_external_format: bool):
     """
-    Export a PyTorch backed pipeline to ONNX Intermediate Representation (IR)
+    Export a PyTorch backed pipeline to ONNX Intermediate Representation (IR
+
     Args:
         nlp: The pipeline to be exported
         opset: The actual version of the ONNX operator set to use
@@ -256,23 +279,38 @@ def convert_pytorch(nlp: Pipeline, opset: int, output: Path, use_external_format
         input_names, output_names, dynamic_axes, tokens = infer_shapes(nlp, "pt")
         ordered_input_names, model_args = ensure_valid_input(nlp.model, tokens, input_names)
 
-        export(
-            nlp.model,
-            model_args,
-            f=output.as_posix(),
-            input_names=ordered_input_names,
-            output_names=output_names,
-            dynamic_axes=dynamic_axes,
-            do_constant_folding=True,
-            use_external_data_format=use_external_format,
-            enable_onnx_checker=True,
-            opset_version=opset,
-        )
+        # PyTorch deprecated the `enable_onnx_checker` and `use_external_data_format` arguments in v1.11,
+        # so we check the torch version for backwards compatibility
+        if parse(torch.__version__) <= parse("1.10.99"):
+            export(
+                nlp.model,
+                model_args,
+                f=output.as_posix(),
+                input_names=ordered_input_names,
+                output_names=output_names,
+                dynamic_axes=dynamic_axes,
+                do_constant_folding=True,
+                use_external_data_format=use_external_format,
+                enable_onnx_checker=True,
+                opset_version=opset,
+            )
+        else:
+            export(
+                nlp.model,
+                model_args,
+                f=output.as_posix(),
+                input_names=ordered_input_names,
+                output_names=output_names,
+                dynamic_axes=dynamic_axes,
+                do_constant_folding=True,
+                opset_version=opset,
+            )
 
 
 def convert_tensorflow(nlp: Pipeline, opset: int, output: Path):
     """
     Export a TensorFlow backed pipeline to ONNX Intermediate Representation (IR)
+
     Args:
         nlp: The pipeline to be exported
         opset: The actual version of the ONNX operator set to use
@@ -289,21 +327,25 @@ def convert_tensorflow(nlp: Pipeline, opset: int, output: Path):
     try:
         import tensorflow as tf
 
-        from keras2onnx import __version__ as k2ov
-        from keras2onnx import convert_keras, save_model
+        import tf2onnx
+        from tf2onnx import __version__ as t2ov
 
-        print(f"Using framework TensorFlow: {tf.version.VERSION}, keras2onnx: {k2ov}")
+        print(f"Using framework TensorFlow: {tf.version.VERSION}, tf2onnx: {t2ov}")
 
         # Build
         input_names, output_names, dynamic_axes, tokens = infer_shapes(nlp, "tf")
 
         # Forward
         nlp.model.predict(tokens.data)
-        onnx_model = convert_keras(nlp.model, nlp.model.name, target_opset=opset)
-        save_model(onnx_model, output.as_posix())
+        input_signature = [tf.TensorSpec.from_tensor(tensor, name=key) for key, tensor in tokens.items()]
+        model_proto, _ = tf2onnx.convert.from_keras(
+            nlp.model, input_signature, opset=opset, output_path=output.as_posix()
+        )
 
     except ImportError as e:
-        raise Exception(f"Cannot import {e.name} required to convert TF model to ONNX. Please install {e.name} first.")
+        raise Exception(
+            f"Cannot import {e.name} required to convert TF model to ONNX. Please install {e.name} first. {e}"
+        )
 
 
 def convert(
@@ -314,25 +356,33 @@ def convert(
     tokenizer: Optional[str] = None,
     use_external_format: bool = False,
     pipeline_name: str = "feature-extraction",
+    **model_kwargs
 ):
     """
-    Convert the pipeline object to the ONNX Intermediate Representation (IR) format.
+    Convert the pipeline object to the ONNX Intermediate Representation (IR) format
+
     Args:
         framework: The framework the pipeline is backed by ("pt" or "tf")
         model: The name of the model to load for the pipeline
         output: The path where the ONNX graph will be stored
         opset: The actual version of the ONNX operator set to use
         tokenizer: The name of the model to load for the pipeline, default to the model's name if not provided
-        use_external_format: Split the model definition from its parameters to allow model bigger than 2GB (PyTorch only)
+        use_external_format:
+            Split the model definition from its parameters to allow model bigger than 2GB (PyTorch only)
         pipeline_name: The kind of pipeline to instantiate (ner, question-answering, etc.)
+        model_kwargs: Keyword arguments to be forwarded to the model constructor
 
     Returns:
 
     """
+    warnings.warn(
+        "The `transformers.convert_graph_to_onnx` package is deprecated and will be removed in version 5 of Transformers",
+        FutureWarning,
+    )
     print(f"ONNX opset version set to: {opset}")
 
     # Load the pipeline
-    nlp = load_graph_from_args(pipeline_name, framework, model, tokenizer)
+    nlp = load_graph_from_args(pipeline_name, framework, model, tokenizer, **model_kwargs)
 
     if not output.parent.exists():
         print(f"Creating folder {output.parent}")
@@ -349,8 +399,9 @@ def convert(
 
 def optimize(onnx_model_path: Path) -> Path:
     """
-    Load the model at the specified path and let onnxruntime look at transformations on the graph
-    to enable all the optimizations possible
+    Load the model at the specified path and let onnxruntime look at transformations on the graph to enable all the
+    optimizations possible
+
     Args:
         onnx_model_path: filepath where the model binary description is stored
 
@@ -373,7 +424,8 @@ def optimize(onnx_model_path: Path) -> Path:
 
 def quantize(onnx_model_path: Path) -> Path:
     """
-    Quantize the weights of the model from float32 to in8 to allow very efficient inference on modern CPU.
+    Quantize the weights of the model from float32 to in8 to allow very efficient inference on modern CPU
+
     Args:
         onnx_model_path: Path to location the exported ONNX model is stored
 

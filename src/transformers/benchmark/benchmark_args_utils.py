@@ -16,6 +16,7 @@
 
 import dataclasses
 import json
+import warnings
 from dataclasses import dataclass, field
 from time import time
 from typing import List
@@ -33,12 +34,10 @@ def list_field(default=None, metadata=None):
 @dataclass
 class BenchmarkArguments:
     """
-    BenchMarkArguments are arguments we use in our benchmark scripts
-    **which relate to the training loop itself**.
+    BenchMarkArguments are arguments we use in our benchmark scripts **which relate to the training loop itself**.
 
-    Using `HfArgumentParser` we can turn this class
-    into argparse arguments to be able to specify them on
-    the command line.
+    Using `HfArgumentParser` we can turn this class into argparse arguments to be able to specify them on the command
+    line.
     """
 
     models: List[str] = list_field(
@@ -122,6 +121,14 @@ class BenchmarkArguments:
             "help": "Instead of loading the model as defined in `config.architectures` if exists, just load the pretrain model weights."
         },
     )
+
+    def __post_init__(self):
+        warnings.warn(
+            f"The class {self.__class__} is deprecated. Hugging Face Benchmarking utils"
+            " are deprecated in general and it is advised to use external Benchmarking libraries "
+            " to benchmark Transformer models.",
+            FutureWarning,
+        )
 
     def to_json_string(self):
         """

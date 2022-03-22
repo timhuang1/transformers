@@ -9,8 +9,7 @@ __pycache__/
 *.so
 
 # tests and logs
-tests/fixtures/*
-!tests/fixtures/sample_text_no_unicode.txt
+tests/fixtures/cached_*_text.txt
 logs/
 lightning_logs/
 lang_code_data/
@@ -133,7 +132,6 @@ dmypy.json
 tensorflow_code
 
 # Models
-models
 proc_data
 
 # examples
@@ -161,9 +159,8 @@ tags
 # pre-commit
 .pre-commit*
 
+# .lock
+*.lock
 
-*.bin
-*.tgz
-cnn_dm/
-xsum_results/
-*.ckpt*
+# DS_Store (MacOS)
+.DS_Store
